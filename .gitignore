@@ -1,0 +1,25 @@
+# 虚拟环境
+.venv/
+
+# 环境变量（含 API Key）
+.env
+.env.local
+
+# Python 产物
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# 工具缓存
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Live2D 模型素材：体积大、授权受限，不入库。
+# 需要模型时按 docs/product.md 的风险说明自行放到这个目录。
+models/
+
+# 运行期临时音频
+tmp_audio/

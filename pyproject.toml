@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "live2d-agent"
+version = "0.1.0"
+description = "Agent 驱动的 Live2D 数字角色"
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "litellm>=1.50",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.5",
+]
+
+[project.optional-dependencies]
+# GUI 与渲染依赖单独一组：CI 只装 .[dev]，不装这一组（见 docs/adr/0002）。
+# live2d-py 的平台 wheel 需要单独处理，等 M1-5 真正用到时再加。
+gui = [
+    "PyQt5>=5.15.11",
+    "pygame>=2.6",
+]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+    "mypy>=1.11",
+]
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+# 每新增一个顶层模块（src/*.py）或子包（src/<pkg>/），都要在下面两行同步登记。
+py-modules = ["config"]
+packages = ["llm"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# 不装包也能直接跑测试；CI 里另外会 pip install -e . 验证打包声明。
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src"]
+mypy_path = "src"
+strict = true
+
+[[tool.mypy.overrides]]
+# litellm 的类型标注随版本波动，不让它挡住我们自己的代码。
+module = ["litellm", "litellm.*", "edge_tts", "edge_tts.*"]
+ignore_missing_imports = true
