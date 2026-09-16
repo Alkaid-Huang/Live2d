@@ -9,7 +9,7 @@ import pytest
 
 from llm import router
 from llm.router import normalize_model_name, stream_reply
-from llm.schemas import LLMProviderError, LLMTimeoutError, Message
+from llm.schemas import LLMError, LLMProviderError, LLMTimeoutError, Message
 
 
 @dataclass
@@ -60,6 +60,21 @@ class _FakeCompletion:
         if self._error is not None:
             raise self._error
         return self._chunks if self._stream is None else self._stream
+
+
+class _ClosableResponse:
+    """模拟 litellm 的流式响应：可迭代，并且带 close()。"""
+
+    def __init__(self, texts: list[str]) -> None:
+        self._texts = texts
+        self.closed = False
+
+    def __iter__(self) -> Any:
+        for text in self._texts:
+            yield _object_chunk(text)
+
+    def close(self) -> None:
+        self.closed = True
 
 
 @pytest.fixture
@@ -170,10 +185,69 @@ def test_error_raised_while_streaming_is_translated(use_fake: Any) -> None:
 def test_normalize_model_name() -> None:
     assert normalize_model_name("deepseek", "deepseek-chat") == "deepseek/deepseek-chat"
     assert normalize_model_name("openai_compatible", "gpt-4o-mini") == "openai/gpt-4o-mini"
-    assert normalize_model_name("deepseek", "openai/gpt-4o") == "openai/gpt-4o"
     assert normalize_model_name("deepseek", "  deepseek-chat  ") == "deepseek/deepseek-chat"
+
+
+def test_normalize_keeps_a_real_provider_prefix() -> None:
+    assert normalize_model_name("deepseek", "openai/gpt-4o") == "openai/gpt-4o"
+    assert normalize_model_name("openai_compatible", "openai/gpt-4o") == "openai/gpt-4o"
+    assert normalize_model_name("deepseek", "deepseek/deepseek-chat") == "deepseek/deepseek-chat"
+
+
+def test_normalize_treats_a_vendor_namespace_as_part_of_the_name() -> None:
+    """回归：厂商命名空间里的斜杠不是 provider 前缀。
+
+    原样放行的话，LiteLLM 会去找一个名叫 Qwen 的 provider，然后报一个难懂的错。
+    """
+    assert (
+        normalize_model_name("openai_compatible", "Qwen/Qwen2.5-7B-Instruct")
+        == "openai/Qwen/Qwen2.5-7B-Instruct"
+    )
+    assert (
+        normalize_model_name("deepseek", "deepseek-ai/DeepSeek-V3.2")
+        == "deepseek/deepseek-ai/DeepSeek-V3.2"
+    )
 
 
 def test_normalize_empty_model_name_raises() -> None:
     with pytest.raises(ValueError):
         normalize_model_name("deepseek", "   ")
+
+def test_response_is_closed_after_full_consumption(use_fake: Any) -> None:
+    response = _ClosableResponse(["甲", "乙"])
+    use_fake(_FakeCompletion([], stream=response))
+    stream = stream_reply([Message(role="user", content="hi")], "deepseek-chat")
+
+    assert list(stream) == ["甲", "乙"]
+    assert response.closed is True
+
+
+def test_response_is_closed_when_consumer_stops_early(use_fake: Any) -> None:
+    """回归：提前中断消费时必须释放底层响应，否则连接要等垃圾回收。"""
+    response = _ClosableResponse(["甲", "乙"])
+    use_fake(_FakeCompletion([], stream=response))
+    stream = stream_reply([Message(role="user", content="hi")], "deepseek-chat")
+
+    assert next(stream) == "甲"
+    stream.close()
+
+    assert response.closed is True
+
+
+def test_no_request_before_first_iteration(use_fake: Any) -> None:
+    """惰性：第一次取值之前不该发请求，否则取消就没有意义了。"""
+    fake = use_fake(_FakeCompletion([_object_chunk("甲")]))
+    stream = stream_reply([Message(role="user", content="hi")], "deepseek-chat")
+
+    assert fake.calls == []
+    assert next(stream) == "甲"
+    assert len(fake.calls) == 1
+
+
+@pytest.mark.parametrize("error", [_Timeout("slow"), RuntimeError("boom")])
+def test_both_errors_are_catchable_as_llm_error(use_fake: Any, error: Exception) -> None:
+    """契约承诺：上层只需要捕获 LLMError 这一个基类。"""
+    use_fake(_FakeCompletion([], error=error))
+
+    with pytest.raises(LLMError):
+        list(stream_reply([Message(role="user", content="hi")], "deepseek-chat"))

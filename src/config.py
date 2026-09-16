@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, field_validator
@@ -15,12 +16,20 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 LLMProvider = Literal["deepseek", "openai_compatible"]
 TTSBackendName = Literal["edge"]
 
+#: 项目根目录。
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+#: .env 的绝对路径。**不能写成相对路径**：相对路径是按进程的工作目录解析的，
+#: 那样一来从别的目录启动程序（run.bat、快捷方式、IDE 的默认工作目录都可能不是
+#: 项目根），整个 .env 会被静默忽略，悄无声息地退回默认值。
+ENV_FILE = PROJECT_ROOT / ".env"
+
 
 class Settings(BaseSettings):
     """全部配置项。字段名与 .env 里的键一一对应（大小写不敏感）。"""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=ENV_FILE,
         env_file_encoding="utf-8",
         extra="ignore",
         case_sensitive=False,

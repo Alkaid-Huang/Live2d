@@ -44,6 +44,10 @@ FORBIDDEN_PACKAGES = frozenset(
 )
 
 
+#: GUI 包。装配入口和界面层用得到，其他层用不到。
+GUI_PACKAGES = frozenset({"PyQt5", "PyQt6", "PySide2", "PySide6"})
+
+
 @dataclass(frozen=True)
 class Exemption:
     """相对 src/ 的文件或目录，以及它被允许 import 的包。"""
@@ -53,10 +57,11 @@ class Exemption:
 
 
 EXEMPTIONS = (
-    # 装配入口：将来会 import PyQt5，这是它的职责
-    Exemption("main.py", FORBIDDEN_PACKAGES),
+    # 装配入口：将来要 import PyQt5 建窗口，仅此而已。
+    # 这里不能写 FORBIDDEN_PACKAGES——那等于把硬约束 2 一起放开了。
+    Exemption("main.py", GUI_PACKAGES),
     # 界面层
-    Exemption("ui", frozenset({"PyQt5", "PyQt6", "PySide2", "PySide6"})),
+    Exemption("ui", GUI_PACKAGES),
     # 渲染层
     Exemption("live2d", frozenset({"pygame", "live2d", "OpenGL", "glfw"})),
     # 唯一允许碰语音后端的地方
@@ -77,9 +82,9 @@ def _allowed_for(path: Path) -> frozenset[str]:
     return frozenset(allowed)
 
 
-def _imported_top_levels(path: Path) -> set[str]:
-    """取出一个文件里所有 import 的顶层包名（相对导入不算）。"""
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+def _top_levels(source: str, filename: str) -> set[str]:
+    """取出源码里所有 import 的顶层包名（相对导入不算）。"""
+    tree = ast.parse(source, filename=filename)
     names: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -87,6 +92,11 @@ def _imported_top_levels(path: Path) -> set[str]:
         elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
             names.add(node.module.split(".")[0])
     return names
+
+
+def _imported_top_levels(path: Path) -> set[str]:
+    """读文件，再交给 _top_levels。"""
+    return _top_levels(path.read_text(encoding="utf-8"), str(path))
 
 
 def test_src_directory_is_not_empty() -> None:
@@ -121,3 +131,20 @@ def test_core_layer_does_not_import_gui_or_network_libraries() -> None:
         violations.extend(f"{relative} 不许 import {name}" for name in offending)
 
     assert not violations, "层级边界被破坏：\n" + "\n".join(violations)
+
+def test_entry_point_may_only_reach_for_gui() -> None:
+    """装配入口放宽 GUI 就够了，不能把语音后端一起放开（硬约束 2）。"""
+    allowed = _allowed_for(SRC / "main.py")
+
+    assert "PyQt5" in allowed
+    assert "edge_tts" not in allowed
+    assert "requests" not in allowed
+
+
+def test_detector_flags_a_known_bad_source() -> None:
+    """检测逻辑自身的测试：拿一段确定违规的源码，它必须报出来。"""
+    source = "import edge_tts\nfrom PyQt5.QtWidgets import QApplication\nimport json\n"
+
+    found = _top_levels(source, "<test>") & FORBIDDEN_PACKAGES
+
+    assert found == {"edge_tts", "PyQt5"}
