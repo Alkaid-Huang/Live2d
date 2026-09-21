@@ -100,6 +100,10 @@ python -m main          # 启动桌面程序（M1-6 之后才有）
 - 所有函数必须有类型注解；`ruff` 和 `mypy` 必须通过
 - 每个模块必须配单元测试；LLM 与 TTS 在测试里必须 mock，不发真实网络请求
 - 提交信息用 Conventional Commits（feat / fix / docs / test / chore）
+- **`.bat` 文件只写 ASCII，而且必须是 CRLF 行尾。** cmd.exe 按 OEM 代码页（中文 Windows 上是
+  GBK）解析批处理，UTF-8 中文会变成乱码、吞掉换行，把下一行命令并进注释里——`run.bat` 的第一版
+  就是这么坏掉的，症状是一串"不是内部或外部命令"。批处理里要说的中文请放到 `docs/` 里。
+  `.gitattributes` 已经把 `*.bat` 钉在 CRLF 上，只写 ASCII 这半条得靠人记住。
 - 不删除已有测试，除非用户明确要求
 - 不擅自新增第三方依赖，需要时先说明理由并等确认
 
