@@ -24,6 +24,7 @@ gui = [
 ]
 dev = [
     "pytest>=8.0",
+    "pytest-cov>=5.0",
     "ruff>=0.6",
     "mypy>=1.11",
 ]
@@ -31,7 +32,7 @@ dev = [
 [tool.setuptools]
 package-dir = { "" = "src" }
 # 每新增一个顶层模块（src/*.py）或子包（src/<pkg>/），都要在下面两行同步登记。
-py-modules = ["config"]
+py-modules = ["config", "events", "runtime"]
 packages = ["llm", "tts", "emotion"]
 
 [tool.pytest.ini_options]
@@ -57,3 +58,12 @@ strict = true
 # litellm 的类型标注随版本波动，不让它挡住我们自己的代码。
 module = ["litellm", "litellm.*", "edge_tts", "edge_tts.*"]
 ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["src"]
+
+[tool.coverage.report]
+# docs/product.md 的成功指标：核心层行覆盖率 ≥ 80%。
+# 门禁写在这里而不是 CI 脚本里，本地跑 --cov 时同样受约束。
+fail_under = 80
+show_missing = true

@@ -28,4 +28,5 @@ jobs:
         run: mypy src
 
       - name: 单元测试
-        run: pytest -q
+        # 不传参数的 --cov 会用 pyproject 的 [tool.coverage.run]；门禁也在 pyproject 里。
+        run: pytest -q --cov --cov-report=term-missing

@@ -17,6 +17,12 @@ dist/
 .mypy_cache/
 .ruff_cache/
 
+# 覆盖率产物
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
 # Live2D 模型素材：体积大、授权受限，不入库。
 # 需要模型时按 docs/product.md 的风险说明自行放到这个目录。
 models/
