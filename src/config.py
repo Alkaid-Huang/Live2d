@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     tts_backend: TTSBackendName = "edge"
     tts_edge_voice: str = "zh-CN-XiaoxiaoNeural"
     tts_edge_rate: str = "+0%"
+    tts_audio_dir: str = "tmp_audio"
 
     # Live2D
     live2d_model_path: str = "models/hiyori"
@@ -55,7 +56,7 @@ class Settings(BaseSettings):
     # 其他
     log_level: str = "INFO"
 
-    @field_validator("llm_model", "tts_edge_voice", "live2d_model_path")
+    @field_validator("llm_model", "tts_edge_voice", "live2d_model_path", "tts_audio_dir")
     @classmethod
     def _not_blank(cls, value: str) -> str:
         """这几个字段是空串时一定跑不起来，不如在加载时就拦住。"""

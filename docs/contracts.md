@@ -34,7 +34,7 @@ M1 没有 HTTP 接口。这份文件冻结的是**模块之间怎么说话**：�
 | `llm.done` | `finish_reason` | llm | runtime、界面 | 回复生成完毕 |
 | `emotion.detected` | `label`, `source` | emotion | 界面、渲染进程 | 本回合的情感 |
 | `tts.state` | `state`, `detail` | tts | 界面 | 合成/播放状态变化 |
-| `tts.chunk` | `segment_index`, `segment_total`, `path`, `duration_ms`, `format` | tts | 渲染进程 | 一段音频就绪 |
+| `tts.chunk` | `segment_index`, `segment_total`, `path`, `format` | tts | 渲染进程 | 一段音频就绪 |
 | `turn.cancelled` | `reason` | runtime | 界面、渲染进程、tts | 本回合作废 |
 | `turn.done` | — | runtime | 全部 | 本回合彻底结束 |
 | `error` | `code`, `message` | 任意模块 | 界面 | 出错 |
@@ -85,12 +85,22 @@ def stream_reply(messages: list[Message], model: str, **opts) -> Iterator[str]
 
 ```python
 class TtsBackend(Protocol):
-    def synthesize(self, text: str, voice: VoiceProfile) -> Iterator[TtsChunk]: ...
+    def synthesize(
+        self,
+        text: str,
+        voice: VoiceProfile,
+        *,
+        turn_id: str,
+        segment_index: int,
+        segment_total: int,
+    ) -> Iterator[TtsChunk]: ...
     def cancel(self, turn_id: str) -> None: ...
 ```
 
 - `text` 是**已经切好的一句话**，后端只负责合成这一句
-- 产出 `TtsChunk`：`path` / `duration_ms` / `format` / `segment_index` / `segment_total`
+- `segment_index` / `segment_total` 由调用方（runtime）传入并原样回填到分片里——序号是切句者的信息，不是后端的信息
+- 产出 `TtsChunk`：`path` / `format` / `segment_index` / `segment_total`。**没有 `duration_ms`**：它现在没有消费者，而且两个后端无法以同等代价提供它，符合 ADR 0001 的原则
+- `cancel(turn_id)` 只设置取消标志；`synthesize()` 在产出下一个分片前检查，已取消就安静停止（不抛异常），并清理尚未交付的半成品文件。已交付的分片不删，因为渲染进程可能正在播放
 - 上层只认识 `TtsBackend`，不认识 `edge_tts`
 - 测试用假后端，不发真实网络请求
 
@@ -152,6 +162,7 @@ LLM_TEMPERATURE=1.0
 TTS_BACKEND=edge
 TTS_EDGE_VOICE=zh-CN-XiaoxiaoNeural
 TTS_EDGE_RATE=+0%
+TTS_AUDIO_DIR=tmp_audio
 
 LIVE2D_MODEL_PATH=models/hiyori
 LIVE2D_WINDOW_WIDTH=400
