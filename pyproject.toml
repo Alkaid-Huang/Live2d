@@ -33,8 +33,8 @@ dev = [
 [tool.setuptools]
 package-dir = { "" = "src" }
 # 每新增一个顶层模块（src/*.py）或子包（src/<pkg>/），都要在下面两行同步登记。
-py-modules = ["config", "events", "runtime"]
-packages = ["llm", "tts", "emotion", "stage"]
+py-modules = ["config", "events", "main", "runtime"]
+packages = ["llm", "tts", "emotion", "stage", "ui"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -63,6 +63,8 @@ module = [
     "litellm.*",
     "edge_tts",
     "edge_tts.*",
+    "PyQt5",
+    "PyQt5.*",
     "pygame",
     "pygame.*",
     "live2d",
@@ -79,7 +81,8 @@ source = ["src"]
 # 有测试的模块里，别往 renderer 和界面里堆判断。
 omit = [
     "src/main.py",
-    "src/ui/*",
+    # 只排除窗口这层薄壳：ui/state.py 是纯逻辑、CI 测得到，要计入指标。
+    "src/ui/window.py",
     "src/stage/renderer.py",
 ]
 

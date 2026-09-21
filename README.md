@@ -2,7 +2,37 @@
 
 Agent 驱动的 Live2D 数字角色：文本输入 → LLM 流式回复 → TTS 合成语音 → Live2D 表情与口型。
 
-求职作品，目标岗位 AI Agent / LLM 应用工程师。目前处于 M1 的文档阶段，还没有代码。
+求职作品，目标岗位 AI Agent / LLM 应用工程师。M1-6 已完成：桌面形态的整条链路装配完毕，
+可以在本机跑起来。
+
+## 跑起来
+
+```bat
+python -m venv .venv
+.venv\Scripts\pip install -e ".[dev,gui]"
+copy .env.example .env
+rem 打开 .env，填 LLM_API_KEY
+
+rem 模型素材不入库，按 docs/product.md 的「技术风险」放到 models/hiyori/
+
+run.bat
+```
+
+`run.bat` 就是"一键启动"——本机脚本，不是容器（理由见 ADR 0002）。
+想单独验证渲染这一半：`.venv\Scripts\python.exe tests\probe_renderer.py`。
+
+完整的人工检查清单在 [docs/smoke-test.md](docs/smoke-test.md)。
+
+## 目录
+
+| 路径 | 是什么 |
+|---|---|
+| `src/llm/` | LLM 路由（LiteLLM 封装） |
+| `src/tts/` | 语音合成，后端可替换（M1 是 edge-tts） |
+| `src/emotion/` | 关键词规则 → 情感标签 → 动作组/表情名 |
+| `src/runtime.py` | 回合编排（核心层，不碰界面） |
+| `src/stage/` | 舞台层：渲染子进程，以及它的协议、口型、待播队列 |
+| `src/ui/` + `src/main.py` | 桌面窗口与装配入口 |
 
 ## 文档导航
 

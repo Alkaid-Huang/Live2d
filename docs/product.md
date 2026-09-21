@@ -126,6 +126,10 @@
    - 官方 Cubism Web Samples 仓库的 `Samples/Resources/<模型名>/`（拿 `Hiyori` 举例：目录里是 `Hiyori.model3.json` / `Hiyori.moc3` / `Hiyori.physics3.json` / `motions/`），整个目录解压到 `models/hiyori/` 即可，配置默认值正好指向这里；
    - 官网 Sample Data 下载页（需要先同意前述两份条款）。
    注意：**素材不进 git**（`.gitignore` 已排除 `models/`），换机器要重新放。用于求职展示属于学习和 SDK 集成测试用途；将来若商用，要重新核对条款。
+
+   **M1-6 补充（已核实）**：`Hiyori` 只有 `Idle` 与 `TapBody` 两个动作组，也没有表情文件。所以
+   `stage/cues.py` 对任何情感都会回落到待机动作，**US-3 的"按情感切换 2–3 种表情或动作"用这份
+   素材验不出来**。这不是装配错误，是素材能力不足；出路见 `docs/smoke-test.md` 的「已知限制」。
 4. **edge-tts 依赖网络。** 可能被限流或不可用，音色固定、音质一般。换后端的触发条件写在 ADR 0001。
 5. **Windows 下的多进程退出清理。** 子进程没收干净会留僵尸进程，或者出现窗口关不掉。
 6. **界面和渲染测不了。** CI 只跑核心层，这两块只能本地冒烟（见 M1-6）。

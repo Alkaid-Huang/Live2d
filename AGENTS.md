@@ -69,8 +69,10 @@ Live2d/
 │   │   ├── model_files.py    # 模型路径解析
 │   │   └── renderer.py       # 渲染子进程入口（唯一测不到的文件）
 │   └── ui/
-│       └── window.py         # PyQt5 主窗口
+│       ├── state.py          # 界面侧纯逻辑：显示状态、发送排队、延迟打点（CI 可测）
+│       └── window.py         # PyQt5 主窗口（薄壳，不判断）
 ├── tests/
+│   └── probe_renderer.py     # 手动冒烟探针：单独验证渲染进程（CI 不跑）
 └── .github/workflows/ci.yml
 ```
 
