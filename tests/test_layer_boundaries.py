@@ -62,8 +62,11 @@ EXEMPTIONS = (
     Exemption("main.py", GUI_PACKAGES),
     # 界面层
     Exemption("ui", GUI_PACKAGES),
-    # 渲染层
-    Exemption("live2d", frozenset({"pygame", "live2d", "OpenGL", "glfw"})),
+    # 渲染子进程。**只有这一个文件**放宽，stage/ 下其他模块仍算核心层：
+    # 协议、排队、口型计算都是纯逻辑，要能在 CI 里测。
+    # 这里放宽的 live2d 是第三方库 live2d-py 的顶层模块；本项目自己的包名是 stage
+    # 而不是 live2d——同名的话 import live2d.v3 会导到自己身上。
+    Exemption("stage/renderer.py", frozenset({"pygame", "live2d", "OpenGL", "glfw"})),
     # 唯一允许碰语音后端的地方
     Exemption("tts/edge_impl.py", frozenset({"edge_tts"})),
 )

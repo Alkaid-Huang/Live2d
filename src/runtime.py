@@ -24,6 +24,7 @@ import logging
 import threading
 import uuid
 from dataclasses import dataclass, field
+from typing import Protocol
 
 from config import Settings
 from emotion import detect
@@ -43,7 +44,7 @@ from events import (
 )
 from llm import stream_reply
 from llm.schemas import LLMError, Message
-from tts import TtsBackend, TtsError, VoiceProfile, split_sentences
+from tts import TtsBackend, TtsChunk, TtsError, VoiceProfile, split_sentences
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,7 @@ DEFAULT_SYSTEM_PROMPT = (
 #: emotion.detected 事件的来源标记。M2 换成分类模型后会有别的取值。
 EMOTION_SOURCE = "rules"
 
-__all__ = ["DEFAULT_SYSTEM_PROMPT", "EMOTION_SOURCE", "ChatRuntime"]
+__all__ = ["DEFAULT_SYSTEM_PROMPT", "EMOTION_SOURCE", "ChatRuntime", "RendererControl"]
 
 
 class _TurnCancelled(Exception):
@@ -69,6 +70,35 @@ class _ConfigError(Exception):
     """
 
     code = "invalid_request"
+
+
+class RendererControl(Protocol):
+    """runtime 眼里的"呈现通道"：把声音和表情送到看得见的地方。
+
+    桌面形态的实现是 stage/channel.py（往渲染子进程的队列里发命令）；将来的
+    Web 形态实现成"往 WebSocket 发帧"。runtime 只依赖这三个方法，既不认识队列，
+    也不认识 pygame，所以核心层不用 import 任何 GUI 或渲染库。
+    """
+
+    def play(
+        self,
+        *,
+        turn_id: str,
+        segment_index: int,
+        segment_total: int,
+        path: str,
+        format: str,
+    ) -> None:
+        """播一段音频。"""
+        ...
+
+    def set_emotion(self, *, turn_id: str, label: str) -> None:
+        """按情感换表情与动作。"""
+        ...
+
+    def stop(self, turn_id: str) -> None:
+        """立刻停止播放、口型归位。"""
+        ...
 
 
 @dataclass
@@ -92,12 +122,15 @@ class ChatRuntime:
         voice: VoiceProfile,
         system_prompt: str = DEFAULT_SYSTEM_PROMPT,
         session_id: str | None = None,
+        renderer: RendererControl | None = None,
     ) -> None:
         self.session_id = session_id or uuid.uuid4().hex
         self._sink = sink
         self._tts = tts_backend
         self._settings = settings
         self._voice = voice
+        # renderer 允许是 None：单元测试和"只关心文本"的用法都不需要它。
+        self._renderer = renderer
         self._messages: list[Message] = [Message(role="system", content=system_prompt)]
         self._lock = threading.Lock()
         self._active: _Turn | None = None
@@ -135,6 +168,7 @@ class ChatRuntime:
             active.reason = reason
             active.cancel_flag.set()
         self._tts.cancel(turn_id)
+        self._stop_playback(turn_id)
         return True
 
     def send(self, user_text: str) -> str:
@@ -199,6 +233,7 @@ class ChatRuntime:
                 source=EMOTION_SOURCE,
             )
         )
+        self._show_emotion(turn, str(label.value))
 
         self._speak(turn, reply)
 
@@ -261,6 +296,7 @@ class ChatRuntime:
                         format=chunk.format,
                     )
                 )
+                self._play(chunk, turn)
 
     # ------------------------------------------------------------------ #
     # 小工具
@@ -276,5 +312,32 @@ class ChatRuntime:
 
     def _fail(self, turn: _Turn, code: str, message: str) -> None:
         """错误收尾：先报错，再按契约第 3 节以 turn.cancelled(reason="error") 终止。"""
+        self._stop_playback(turn.turn_id)
         self._emit(ErrorEvent(turn_id=turn.turn_id, code=code, message=message))
         self._emit(TurnCancelledEvent(turn_id=turn.turn_id, reason="error"))
+
+    # ------------------------------------------------------------------ #
+    # 呈现通道（没有渲染进程时全部是空操作）
+    # ------------------------------------------------------------------ #
+
+    def _play(self, chunk: TtsChunk, turn: _Turn) -> None:
+        if self._renderer is None:
+            return
+        self._renderer.play(
+            turn_id=turn.turn_id,
+            segment_index=chunk.segment_index,
+            segment_total=chunk.segment_total,
+            path=str(chunk.path),
+            format=chunk.format,
+        )
+
+    def _show_emotion(self, turn: _Turn, label: str) -> None:
+        if self._renderer is None:
+            return
+        self._renderer.set_emotion(turn_id=turn.turn_id, label=label)
+
+    def _stop_playback(self, turn_id: str) -> None:
+        """停播放。取消和出错都要走这里，否则取消之后旧语音还会响完。"""
+        if self._renderer is None:
+            return
+        self._renderer.stop(turn_id)

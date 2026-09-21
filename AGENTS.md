@@ -30,6 +30,8 @@ Agent 驱动的 Live2D 数字角色。求职作品，目标岗位 AI Agent / LLM
 3. **口型只用音频音量驱动**，不使用 edge-tts 的逐字时间戳（见 `docs/adr/0001`）。
 4. **配置只走 `.env`**，API Key、模型名、文件路径一律不硬编码；仓库里只提交 `.env.example`。
 
+放行的例外只有两个：`stage/renderer.py`（渲染子进程）和界面层（`main.py`、`ui/`）。除此之外 `src/` 下所有文件都算核心层，由 `tests/test_layer_boundaries.py` 自动盯着——新增文件不用记得回来登记，越界会自动失败。
+
 ## 目录结构
 
 ```
@@ -58,13 +60,24 @@ Live2d/
 │   ├── tts/
 │   │   ├── base.py           # TtsBackend 协议 + TtsChunk + TtsState
 │   │   └── edge_impl.py      # 唯一允许 import edge_tts 的文件
-│   ├── live2d/
-│   │   └── renderer.py       # 渲染子进程入口
+│   ├── stage/                # 舞台层：渲染子进程 + 播放 + 口型
+│   │   ├── protocol.py       # 与渲染进程之间的命令与回传
+│   │   ├── channel.py        # 主进程侧的发送与接收
+│   │   ├── playback.py       # 待播队列与取消
+│   │   ├── lipsync.py        # 音量 → 张嘴幅度
+│   │   ├── cues.py           # 情感 → 动作组 / 表情名
+│   │   ├── model_files.py    # 模型路径解析
+│   │   └── renderer.py       # 渲染子进程入口（唯一测不到的文件）
 │   └── ui/
 │       └── window.py         # PyQt5 主窗口
 ├── tests/
 └── .github/workflows/ci.yml
 ```
+
+> 这一层叫 `stage` 而不是 `live2d`：第三方库 live2d-py 提供的顶层模块也叫
+> `live2d`，同名会让 `import live2d.v3` 导到我们自己身上。
+> `renderer.py` 必须保持"薄"：逻辑放进上面那几个模块，那里才测得到（见
+> `pyproject.toml` 的 coverage omit 说明）。
 
 ## 常用命令
 

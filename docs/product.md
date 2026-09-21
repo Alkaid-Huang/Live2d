@@ -88,7 +88,7 @@
 | M1-2 | TTS 抽象接口 + edge 实现 | `tts/base.py`、`tts/edge_impl.py`、测试（全 mock） |
 | M1-3 | 情感规则与映射表 | `emotion/rules.py`、`emotion/mapping.py`、测试 |
 | M1-4 | 事件与运行时 | `events.py`、`runtime.py`、测试 |
-| M1-5 | Live2D 渲染子进程 | `live2d/renderer.py`（含音量驱动口型） |
+| M1-5 | 舞台层与渲染子进程 | `stage/` 下 7 个文件：协议、通道、待播队列、口型、情感映射、模型路径、渲染入口 |
 | M1-6 | 界面装配 + 一键启动 + 冒烟 | `ui/window.py`、`main.py`、`run.bat`、冒烟清单、README 补完 |
 
 规则：一次只做一个，做完提交、开新会话再做下一个。
@@ -119,10 +119,13 @@
 
 按"最可能卡住"排序：
 
-1. **live2d-py 是最大的不确定性。** 它把 Python 版本绑在 3.11，Windows 与 macOS 的 wheel 不一样，上游维护状态不稳定，参照项目甚至自己 fork 了一份来编译。
-   **降级方案**：如果卡住超过半天，先用一张静态立绘 + 占位口型跑通整条链路，别让 M1 卡在渲染上。渲染是可以后补的，链路不能。
+1. **live2d-py 的依赖风险已经核实过了**：PyPI 上有 `cp311-win_amd64` 的预编译 wheel，本项目环境（Python 3.11.9 + Windows）可直接安装，不需要像参照项目那样自己编译。但它不是 abi3，**Python 版本必须钉在 3.11**，升到 3.12 就没有 wheel 了。
+   **仍然保留降级方案**：如果渲染本身卡住超过半天，先用一张静态立绘 + 占位口型跑通整条链路。渲染是可以后补的，链路不能。
 2. **路径含中文或空格会导致模型加载失败。** 项目路径、模型路径都要检查。
-3. **Live2D 模型素材的授权。** 求职展示要注意版权，优先用官方允许使用的样例模型。
+3. **模型素材：M1-5 阶段手上还没有。** live2d-py 本身不带模型，必须自己准备。合法来源是 Live2D 官方的**免费素材**：`Hiyori`、`Haru`、`Mao`、`Mark`、`Natori`、`Ren`、`Rice`、`Wanko` 这八个样例模型，许可方式是 Free Material License + 每个模型各自的 Sample Model Terms。两条取用路径：
+   - 官方 Cubism Web Samples 仓库的 `Samples/Resources/<模型名>/`（拿 `Hiyori` 举例：目录里是 `Hiyori.model3.json` / `Hiyori.moc3` / `Hiyori.physics3.json` / `motions/`），整个目录解压到 `models/hiyori/` 即可，配置默认值正好指向这里；
+   - 官网 Sample Data 下载页（需要先同意前述两份条款）。
+   注意：**素材不进 git**（`.gitignore` 已排除 `models/`），换机器要重新放。用于求职展示属于学习和 SDK 集成测试用途；将来若商用，要重新核对条款。
 4. **edge-tts 依赖网络。** 可能被限流或不可用，音色固定、音质一般。换后端的触发条件写在 ADR 0001。
 5. **Windows 下的多进程退出清理。** 子进程没收干净会留僵尸进程，或者出现窗口关不掉。
 6. **界面和渲染测不了。** CI 只跑核心层，这两块只能本地冒烟（见 M1-6）。

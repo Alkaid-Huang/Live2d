@@ -51,8 +51,16 @@ _不叫_：expression 文件、脸部状态
 _不叫_：业务层、后端、service
 
 **渲染进程**
-单独跑 Live2D 的子进程（pygame + OpenGL + live2d-py）。它同时负责播放音频——因为口型要用正在播的那段音频的音量，同进程最省事。
+单独跑 Live2D 的子进程（pygame + OpenGL + live2d-py），代码在 `stage/renderer.py`。它同时负责播放音频——因为口型要用正在播的那段音频的音量，同进程最省事。
 _不叫_：Live2D 窗口、viewer、渲染线程
+
+**舞台层**
+把角色的声音和表情呈现出来的那一层，代码在 `src/stage/`。它有两只手：一只手往渲染进程发命令（播音频、换表情、停播放），另一只手把渲染进程的回传翻译成事件。它**不叫** `live2d`——那是第三方库 `live2d-py` 的模块名，同名会撞车。
+_不叫_：渲染层、live2d 包、表现层
+
+**呈现通道**
+runtime 眼里的"声音和表情往哪送"，只有 `play` / `set_emotion` / `stop` 三个方法（`runtime.RendererControl`）。桌面形态的实现是 `stage/channel.py`，将来的 Web 形态实现成"往 WebSocket 发帧"。
+_不叫_：播放器、renderer、输出层
 
 **一键启动**
 本机脚本启动（Windows 下 `run.bat`）。**不是** Docker 容器——这个项目不用 Docker，理由见 ADR 0002。

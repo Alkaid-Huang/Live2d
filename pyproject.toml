@@ -17,10 +17,11 @@ dependencies = [
 
 [project.optional-dependencies]
 # GUI 与渲染依赖单独一组：CI 只装 .[dev]，不装这一组（见 docs/adr/0002）。
-# live2d-py 的平台 wheel 需要单独处理，等 M1-5 真正用到时再加。
+# live2d-py 只发布到 cp311 的 wheel（不是 abi3），所以 Python 版本必须钉在 3.11。
 gui = [
     "PyQt5>=5.15.11",
     "pygame>=2.6",
+    "live2d-py>=0.7.0.4",
 ]
 dev = [
     "pytest>=8.0",
@@ -33,7 +34,7 @@ dev = [
 package-dir = { "" = "src" }
 # 每新增一个顶层模块（src/*.py）或子包（src/<pkg>/），都要在下面两行同步登记。
 py-modules = ["config", "events", "runtime"]
-packages = ["llm", "tts", "emotion"]
+packages = ["llm", "tts", "emotion", "stage"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -55,12 +56,32 @@ mypy_path = "src"
 strict = true
 
 [[tool.mypy.overrides]]
-# litellm 的类型标注随版本波动，不让它挡住我们自己的代码。
-module = ["litellm", "litellm.*", "edge_tts", "edge_tts.*"]
+# 这些库要么类型标注随版本波动，要么根本没有 stubs，不让它们挡住我们自己的代码。
+# live2d 是 live2d-py 提供的模块名，与本项目的 stage 包不冲突。
+module = [
+    "litellm",
+    "litellm.*",
+    "edge_tts",
+    "edge_tts.*",
+    "pygame",
+    "pygame.*",
+    "live2d",
+    "live2d.*",
+    "OpenGL",
+    "OpenGL.*",
+]
 ignore_missing_imports = true
 
 [tool.coverage.run]
 source = ["src"]
+# docs/product.md 的成功指标只算核心层：界面与渲染进程不计入——CI 里没有显示器，
+# 也不装 GUI 依赖，它们跑不起来。代价是这两个文件必须保持"薄壳"：逻辑一律放在
+# 有测试的模块里，别往 renderer 和界面里堆判断。
+omit = [
+    "src/main.py",
+    "src/ui/*",
+    "src/stage/renderer.py",
+]
 
 [tool.coverage.report]
 # docs/product.md 的成功指标：核心层行覆盖率 ≥ 80%。
