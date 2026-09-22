@@ -29,3 +29,6 @@ models/
 
 # 运行期临时音频
 tmp_audio/
+
+# 学习文件
+learn
