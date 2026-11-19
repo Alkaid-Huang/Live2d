@@ -31,7 +31,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from config import Settings  # noqa: E402
-from events import (  # noqa: E402
+from contracts import (  # noqa: E402
     EmotionDetectedEvent,
     ErrorEvent,
     Event,

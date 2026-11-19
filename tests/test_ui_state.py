@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from events import (
+from contracts import (
     EmotionDetectedEvent,
     ErrorEvent,
     LlmDoneEvent,

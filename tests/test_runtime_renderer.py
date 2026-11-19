@@ -9,9 +9,9 @@ from typing import Any
 
 import pytest
 
-import runtime as runtime_module
 from config import Settings
-from events import Event
+from contracts import Event
+from llm import router as llm_router
 from runtime import ChatRuntime
 from tts import TtsChunk, edge_profile
 
@@ -96,7 +96,7 @@ def install_stream(
         if error is not None:
             raise error
 
-    monkeypatch.setattr(runtime_module, "stream_reply", stream)
+    monkeypatch.setattr(llm_router, "stream_reply", stream)
 
 
 def make_runtime(
@@ -166,7 +166,7 @@ def test_cancel_by_the_user_also_stops_playback(
 
     # 第一段交付之后立刻取消，模拟"用户又发了一条"。
     monkeypatch.setattr(
-        runtime_module,
+        llm_router,
         "stream_reply",
         lambda messages, model, **kwargs: iter(_cancelling_stream(cancel_from_another_thread)),
     )
@@ -183,7 +183,7 @@ def _cancelling_stream(on_first: Callable[[], None]) -> Iterator[str]:
 
 
 def test_error_also_stops_playback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from llm.schemas import LLMTimeoutError
+    from contracts import LLMTimeoutError
 
     chat, events, renderer, _ = make_runtime(tmp_path)
     install_stream(monkeypatch, [], error=LLMTimeoutError("超时"))

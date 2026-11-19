@@ -12,28 +12,18 @@ from __future__ import annotations
 import logging
 import queue
 from collections.abc import Mapping
-from typing import Protocol
 
+from contracts import QueueLike as QueueLike
 from stage.protocol import (
-    Message,
     PlayAudioCommand,
     QuitCommand,
+    RendererMessage,
     SetEmotionCommand,
     StopAudioCommand,
     message_from_payload,
 )
 
 logger = logging.getLogger(__name__)
-
-
-class QueueLike(Protocol):
-    """``multiprocessing.Queue`` 里我们用到的部分。"""
-
-    def put(self, item: object) -> None: ...
-
-    def put_nowait(self, item: object) -> None: ...
-
-    def get_nowait(self) -> object: ...
 
 
 class RendererChannel:
@@ -75,13 +65,13 @@ class RendererChannel:
         """让渲染进程收尾退出。"""
         self._commands.put(QuitCommand().to_payload())
 
-    def drain_messages(self) -> tuple[Message, ...]:
+    def drain_messages(self) -> tuple[RendererMessage, ...]:
         """取走渲染进程这段时间回传的全部消息（不阻塞）。
 
         队列里可能出现无法解析的东西（对象不对、字段缺了、版本不匹配）。这类消息
         只记一条 warning 就丢掉：让界面因为一条坏消息崩掉，比丢一条播放状态更糟。
         """
-        messages: list[Message] = []
+        messages: list[RendererMessage] = []
         while True:
             try:
                 raw = self._messages.get_nowait()

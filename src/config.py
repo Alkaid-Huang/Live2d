@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_base_url: str = ""
     llm_temperature: float = Field(default=1.0, ge=0.0, le=2.0)
+    llm_timeout: float = Field(default=30.0, gt=0.0)
 
     # TTS
     tts_backend: TTSBackendName = "edge"

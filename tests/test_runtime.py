@@ -15,8 +15,8 @@ import pytest
 
 import runtime as runtime_module
 from config import Settings
-from events import Event
-from llm.schemas import LLMTimeoutError
+from contracts import Event, LLMTimeoutError
+from llm import router as llm_router
 from runtime import ChatRuntime
 from tts import TtsChunk, TtsError, edge_profile
 
@@ -67,7 +67,7 @@ def use_stream(monkeypatch: pytest.MonkeyPatch) -> InstallStream:
         error: Exception | None = None,
     ) -> None:
         monkeypatch.setattr(
-            runtime_module,
+            llm_router,
             "stream_reply",
             make_stream(deltas, after_first_delta=after_first_delta, error=error),
         )

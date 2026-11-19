@@ -39,10 +39,10 @@ from stage.protocol import (
     AudioIdleMessage,
     AudioStartedMessage,
     Command,
-    Message,
     PlayAudioCommand,
     QuitCommand,
     RendererFailedMessage,
+    RendererMessage,
     RendererReadyMessage,
     SetEmotionCommand,
     StopAudioCommand,
@@ -126,7 +126,7 @@ class RendererApp:
     # 回传
     # ------------------------------------------------------------------ #
 
-    def _send(self, message: Message) -> None:
+    def _send(self, message: RendererMessage) -> None:
         try:
             self._messages.put_nowait(message_to_payload(message))
         except Exception:  # 队列满/对面已退出：报状态失败不能把画面卡住

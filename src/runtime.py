@@ -24,27 +24,33 @@ import logging
 import threading
 import uuid
 from dataclasses import dataclass, field
-from typing import Protocol
 
 from config import Settings
-from emotion import detect
-from events import (
+from contracts import (
     CancelReason,
     EmotionDetectedEvent,
     ErrorEvent,
     Event,
     EventSink,
+    LlmClient,
     LlmDoneEvent,
+    LLMError,
     LlmTokenEvent,
+    Message,
+    RendererControl,
+    TtsBackend,
+    TtsChunk,
     TtsChunkEvent,
+    TtsError,
     TtsStateEvent,
     TurnCancelledEvent,
     TurnDoneEvent,
     TurnStartEvent,
+    VoiceProfile,
 )
-from llm import stream_reply
-from llm.schemas import LLMError, Message
-from tts import TtsBackend, TtsChunk, TtsError, VoiceProfile, split_sentences
+from emotion import detect
+from llm.router import RouterLlmClient
+from tts import split_sentences
 
 logger = logging.getLogger(__name__)
 
@@ -72,35 +78,6 @@ class _ConfigError(Exception):
     code = "invalid_request"
 
 
-class RendererControl(Protocol):
-    """runtime 眼里的"呈现通道"：把声音和表情送到看得见的地方。
-
-    桌面形态的实现是 stage/channel.py（往渲染子进程的队列里发命令）；将来的
-    Web 形态实现成"往 WebSocket 发帧"。runtime 只依赖这三个方法，既不认识队列，
-    也不认识 pygame，所以核心层不用 import 任何 GUI 或渲染库。
-    """
-
-    def play(
-        self,
-        *,
-        turn_id: str,
-        segment_index: int,
-        segment_total: int,
-        path: str,
-        format: str,
-    ) -> None:
-        """播一段音频。"""
-        ...
-
-    def set_emotion(self, *, turn_id: str, label: str) -> None:
-        """按情感换表情与动作。"""
-        ...
-
-    def stop(self, turn_id: str) -> None:
-        """立刻停止播放、口型归位。"""
-        ...
-
-
 @dataclass
 class _Turn:
     """一个回合的可变状态。只在 runtime 内部流转。"""
@@ -111,7 +88,24 @@ class _Turn:
 
 
 class ChatRuntime:
-    """一个会话的编排器。一个实例管一个会话。"""
+    """一个会话的编排器：把一次用户输入走完 LLM → 情感 → TTS 的全程。
+
+    一个实例管一个会话。``send()`` 阻塞，调用方负责把它放进后台线程。
+
+    Attributes:
+        session_id: 会话标识，未传入时自动生成。
+
+    Example:
+        ```python
+        runtime = ChatRuntime(
+            sink=events.append,
+            tts_backend=backend,
+            settings=Settings(),
+            voice=edge_profile("zh-CN-XiaoxiaoNeural"),
+        )
+        turn_id = runtime.send("在吗")
+        ```
+    """
 
     def __init__(
         self,
@@ -123,6 +117,7 @@ class ChatRuntime:
         system_prompt: str = DEFAULT_SYSTEM_PROMPT,
         session_id: str | None = None,
         renderer: RendererControl | None = None,
+        llm: LlmClient | None = None,
     ) -> None:
         self.session_id = session_id or uuid.uuid4().hex
         self._sink = sink
@@ -131,6 +126,8 @@ class ChatRuntime:
         self._voice = voice
         # renderer 允许是 None：单元测试和"只关心文本"的用法都不需要它。
         self._renderer = renderer
+        # llm 允许是 None：默认走真实的 LiteLLM 客户端，测试里换成假的。
+        self._llm: LlmClient = llm or RouterLlmClient()
         self._messages: list[Message] = [Message(role="system", content=system_prompt)]
         self._lock = threading.Lock()
         self._active: _Turn | None = None
@@ -141,25 +138,48 @@ class ChatRuntime:
 
     @property
     def history(self) -> tuple[Message, ...]:
-        """当前会话的全部消息（含 system）。M1 只存在内存里。"""
+        """当前会话的全部消息（含 system）的只读快照。
+
+        Returns:
+            消息元组。中途取消的助手回复不在里面。
+
+        Note:
+            只存在内存里，关掉程序就没了。
+        """
         return tuple(self._messages)
 
     @property
     def active_turn_id(self) -> str | None:
-        """正在跑的回合 id；没有就是 None。界面用它决定要不要发取消。"""
+        """仍在**编排**中的回合 id。
+
+        Returns:
+            回合 id；没有回合在跑时为 ``None``。
+
+        Note:
+            ``None`` 不代表没有声音——播放阶段沿用原回合，但编排已经结束。
+        """
         with self._lock:
             return self._active.turn_id if self._active is not None else None
 
     def cancel(self, turn_id: str, reason: CancelReason = "user_stop") -> bool:
-        """请求取消某个回合。
+        """请求取消某个回合。只设标志，不阻塞。
 
-        只设标志，不阻塞：``send()`` 会在下一个检查点（收到一段 LLM 增量之前、
-        交付一个音频分片之前、开始合成下一句之前）看到标志并收尾。
+        ``send()`` 会在下一个检查点（收到一段 LLM 增量之前、交付一个音频分片之前、
+        开始合成下一句之前）看到标志并收尾，同时停掉语音合成与播放。
 
-        同时通知语音后端，让它也在产出下一片之前停下——网络请求可能正卡在中间。
+        Args:
+            turn_id: 要取消的回合。与当前编排回合不一致时什么也不做。
+            reason: 写进 ``turn.cancelled`` 的原因。
 
         Returns:
-            bool: 是否确实取消了正在跑的那个回合（id 对不上或没有回合时返回 False）。
+            是否确实取消了正在跑的回合。id 对不上或没有回合时返回 ``False``。
+
+        Example:
+            ```python
+            active = runtime.active_turn_id
+            if active is not None:
+                runtime.cancel(active, reason="user_new_message")
+            ```
         """
         with self._lock:
             active = self._active
@@ -172,11 +192,25 @@ class ChatRuntime:
         return True
 
     def send(self, user_text: str) -> str:
-        """跑完一整个回合，阻塞到结束。返回 turn_id。
+        """跑完一整个回合，阻塞到编排结束。
+
+        成功、业务错误和取消都通过 sink 发事件，本方法不抛业务异常。
+
+        Args:
+            user_text: 用户输入。首尾空白会被去掉。
+
+        Returns:
+            本回合的 ``turn_id``。``turn.done`` 之后音频可能仍在播放。
 
         Raises:
-            ValueError: 消息是空的。
-            RuntimeError: 上一个回合还没结束（调用方必须先 cancel 并等它返回）。
+            ValueError: 消息是空的（去掉空白后）。
+            RuntimeError: 上一个回合还没结束。调用方必须先 ``cancel()`` 并等它返回。
+
+        Example:
+            ```python
+            thread = threading.Thread(target=runtime.send, args=("在吗",), daemon=True)
+            thread.start()
+            ```
         """
         text = user_text.strip()
         if not text:
@@ -247,13 +281,14 @@ class ChatRuntime:
             raise _ConfigError(str(exc)) from exc
 
         parts: list[str] = []
-        for delta in stream_reply(
+        for delta in self._llm.stream(
             list(self._messages),
-            settings.llm_model,
+            model=settings.llm_model,
             provider=settings.llm_provider,
             api_key=settings.llm_api_key or None,
             base_url=settings.llm_base_url or None,
             temperature=settings.llm_temperature,
+            timeout=settings.llm_timeout,
         ):
             self._check(turn)
             parts.append(delta)

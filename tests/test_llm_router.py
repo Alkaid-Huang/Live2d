@@ -7,9 +7,9 @@ from typing import Any
 
 import pytest
 
+from contracts import LLMError, LLMProviderError, LLMTimeoutError, Message
 from llm import router
 from llm.router import normalize_model_name, stream_reply
-from llm.schemas import LLMError, LLMProviderError, LLMTimeoutError, Message
 
 
 @dataclass

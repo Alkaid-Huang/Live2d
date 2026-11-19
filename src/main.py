@@ -24,10 +24,9 @@ from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import QApplication
 
 from config import PROJECT_ROOT, Settings
-from events import ErrorEvent, Event, TurnCancelledEvent, TurnDoneEvent
+from contracts import ErrorEvent, Event, QueueLike, TurnCancelledEvent, TurnDoneEvent
 from runtime import ChatRuntime
 from stage import RendererChannel, message_to_events, run_renderer_process
-from stage.channel import QueueLike
 from stage.protocol import LIVE2D_LOAD_FAILED
 from tts import create_tts_backend, edge_profile
 from ui.state import LatencyTracker, SendQueue

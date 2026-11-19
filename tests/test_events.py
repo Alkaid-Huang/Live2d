@@ -6,8 +6,8 @@ import dataclasses
 
 import pytest
 
-import events
-from events import (
+import contracts
+from contracts import (
     Event,
     LlmDoneEvent,
     LlmTokenEvent,
@@ -56,16 +56,16 @@ def test_turn_id_is_not_duplicated_into_data() -> None:
 
 
 def test_tts_state_values_match_the_tts_layer() -> None:
-    """events 里这份 TtsState 是 tts.base 那一份的副本，不许悄悄分叉。"""
+    """tts 层 re-export 的 TtsState 必须与契约里那一份是同一个定义。"""
     from typing import get_args
 
-    assert set(get_args(events.TtsState)) == set(get_args(TtsLayerState))
+    assert set(get_args(contracts.TtsState)) == set(get_args(TtsLayerState))
 
 
 def test_cancel_reasons_match_the_contract() -> None:
     from typing import get_args
 
-    assert set(get_args(events.CancelReason)) == {"user_new_message", "user_stop", "error"}
+    assert set(get_args(contracts.CancelReason)) == {"user_new_message", "user_stop", "error"}
 
 
 def test_events_are_immutable() -> None:

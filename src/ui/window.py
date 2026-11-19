@@ -21,7 +21,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from events import Event
+from contracts import Event
 from ui.state import ConversationView
 
 #: 助手气泡上的提示文字。

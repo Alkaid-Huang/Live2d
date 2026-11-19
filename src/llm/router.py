@@ -16,7 +16,7 @@ import os
 from collections.abc import Callable, Iterator, Sequence
 from typing import Any
 
-from llm.schemas import LLMError, LLMProviderError, LLMTimeoutError, Message
+from contracts import LLMError, LLMProviderError, LLMTimeoutError, Message
 
 CompletionFn = Callable[..., Any]
 
@@ -62,8 +62,23 @@ def normalize_model_name(provider: str, model: str) -> str:
     前缀一模一样，但它不是前缀。原样放行的话，LiteLLM 会去找一个名叫 ``Qwen`` 的
     provider。未识别的名字统一挂到 ``openai/`` 下面，配合 api_base 使用。
 
+    Args:
+        provider: ``"deepseek"`` 或 ``"openai_compatible"``。
+        model: 配置里写的模型名。
+
+    Returns:
+        补好前缀的模型名。
+
     Raises:
         ValueError: 模型名是空的。
+
+    Example:
+        ```python
+        normalize_model_name("deepseek", "deepseek-chat")
+        # 'deepseek/deepseek-chat'
+        normalize_model_name("openai_compatible", "Qwen/Qwen2.5-7B")
+        # 'openai/Qwen/Qwen2.5-7B'
+        ```
     """
     name = model.strip()
     if not name:
@@ -90,10 +105,28 @@ def stream_reply(
 
     只产出文本。拼 prompt、管上下文、判断该不该取消，都是上层（runtime）的事。
 
+    Args:
+        messages: 完整上下文（含 system），调用方负责拼接与裁剪。
+        model: 模型名，可以带也可以不带 provider 前缀。
+        provider: ``"deepseek"`` 或 ``"openai_compatible"``。
+        api_key: API Key；``None`` 表示交给底层库从环境变量读。
+        base_url: 自建端点的地址；``None`` 表示用官方地址。
+        temperature: 采样温度。
+        timeout: 单次请求超时（秒）。
+
+    Yields:
+        文本增量。空 delta 或只有统计信息的帧被跳过。
+
     Raises:
-        LLMTimeoutError: 请求超时（错误码 llm_timeout）
-        LLMProviderError: Provider 报错或连不上（错误码 llm_error）
-        ValueError: 模型名为空
+        LLMTimeoutError: 请求超时（错误码 llm_timeout）。
+        LLMProviderError: Provider 报错或连不上（错误码 llm_error）。
+        ValueError: 模型名为空。
+
+    Example:
+        ```python
+        messages = [Message(role="user", content="在吗")]
+        reply = "".join(stream_reply(messages, "deepseek-chat", api_key="sk-..."))
+        ```
     """
     payload: dict[str, Any] = {
         "model": normalize_model_name(provider, model),
@@ -164,3 +197,58 @@ def _translate_error(exc: Exception) -> LLMError:
     if "timeout" in name or "timedout" in name:
         return LLMTimeoutError(f"LLM 请求超时：{exc}")
     return LLMProviderError(f"LLM 调用失败：{exc}")
+
+
+class RouterLlmClient:
+    """``contracts.LlmClient`` 的默认实现：转交 :func:`stream_reply`。
+
+    单独成类是为了让 runtime 依赖端口而不是模块函数；测试里换掉这个类
+    或替换 ``llm.router.stream_reply`` 都可以。
+
+    Example:
+        ```python
+        client = RouterLlmClient()
+        deltas = list(client.stream(history, model="deepseek-chat",
+                                    provider="deepseek", api_key="sk-...",
+                                    base_url=None, temperature=1.0, timeout=30.0))
+        ```
+    """
+
+    def stream(
+        self,
+        messages: Sequence[Message],
+        *,
+        model: str,
+        provider: str,
+        api_key: str | None,
+        base_url: str | None,
+        temperature: float,
+        timeout: float,
+    ) -> Iterator[str]:
+        """见 ``contracts.LlmClient.stream``。
+
+        Args:
+            messages: 完整上下文。
+            model: 模型名。
+            provider: Provider 名。
+            api_key: API Key。
+            base_url: 自建端点地址。
+            temperature: 采样温度。
+            timeout: 单次请求超时（秒）。
+
+        Returns:
+            文本增量的迭代器（惰性）。
+
+        Raises:
+            LLMTimeoutError: 请求超时。
+            LLMProviderError: Provider 报错或连不上。
+        """
+        return stream_reply(
+            messages,
+            model,
+            provider=provider,
+            api_key=api_key,
+            base_url=base_url,
+            temperature=temperature,
+            timeout=timeout,
+        )

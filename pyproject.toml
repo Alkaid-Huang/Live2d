@@ -29,12 +29,18 @@ dev = [
     "ruff>=0.6",
     "mypy>=1.11",
 ]
+# 接口参考从 docstring 生成（见 docs/reference.md）：文档与代码同源，不会漂移。
+# CI 不装这一组，构建文档是本机操作。
+docs = [
+    "mkdocs>=1.6",
+    "mkdocstrings[python]>=0.26",
+]
 
 [tool.setuptools]
 package-dir = { "" = "src" }
 # 每新增一个顶层模块（src/*.py）或子包（src/<pkg>/），都要在下面两行同步登记。
-py-modules = ["config", "events", "main", "runtime"]
-packages = ["llm", "tts", "emotion", "stage", "ui"]
+py-modules = ["config", "main", "runtime"]
+packages = ["contracts", "emotion", "llm", "stage", "tts", "ui"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

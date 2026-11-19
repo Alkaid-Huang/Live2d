@@ -35,7 +35,27 @@ _PRIORITY: tuple[EmotionLabel, ...] = (
 
 
 def detect(text: str) -> EmotionLabel:
-    """把一段文本判成一个情感标签。空串或没命中任何关键词时返回中性。"""
+    """把一段文本判成一个情感标签。
+
+    Args:
+        text: 要判断的文本，通常是 LLM 的完整回复。
+
+    Returns:
+        命中的第一个标签；空文本或未命中任何关键词时返回 ``中性``。
+
+    Note:
+        不抛异常。
+
+    Note:
+        命中多个标签时按 ``_PRIORITY`` 取第一个。规则只看字面、不看否定：
+        「一点也不开心」仍会判成开心。
+
+    Example:
+        ```python
+        detect("太好了，谢谢你！")   # EmotionLabel.HAPPINESS
+        detect("今天星期二。")       # EmotionLabel.NEUTRAL
+        ```
+    """
     if not text:
         return EmotionLabel.NEUTRAL
     for label in _PRIORITY:

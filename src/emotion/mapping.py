@@ -18,7 +18,14 @@ logger = logging.getLogger(__name__)
 
 
 class EmotionLabel(StrEnum):
-    """七分类情感标签，值就是文档里的中文名。"""
+    """七分类情感标签，值就是文档里用的中文名。
+
+    Example:
+        ```python
+        detect("太好了！") == EmotionLabel.HAPPINESS   # True
+        EmotionLabel.NEUTRAL.value                    # '中性'
+        ```
+    """
 
     HAPPINESS = "开心"
     SADNESS = "难过"
@@ -33,8 +40,18 @@ class EmotionLabel(StrEnum):
 class EmotionCue:
     """一次情感判断要告诉渲染进程的两件事。
 
-    motion_group 是动作组名，expression 是表情名，两者都是字符串。
-    具体怎么变成 live2d-py 的参数，是渲染进程的事，这一层不碰。
+    Attributes:
+        motion_group: 动作组名，例如 ``"happiness"``。
+        expression: 表情名，例如 ``"smile"``。
+
+    Note:
+        两者都是抽象名字，不含任何 live2d-py 参数。
+
+    Example:
+        ```python
+        resolve(EmotionLabel.HAPPINESS)
+        # EmotionCue(motion_group='happiness', expression='smile')
+        ```
     """
 
     motion_group: str
@@ -52,10 +69,22 @@ EMOTION_MAPPING: dict[EmotionLabel, EmotionCue] = {
 
 
 def resolve(label: EmotionLabel) -> EmotionCue:
-    """把标签解析成渲染提示。未映射的标签回落到中性并记录原因。
+    """把标签解析成渲染提示。
 
-    契约（docs/contracts.md 第 4 节）：未映射的标签回落到中性并记一条日志，
-    不许静默失败。
+    Args:
+        label: 情感标签。
+
+    Returns:
+        对应的动作组与表情名。
+
+    Note:
+        不抛异常。未映射的标签回落到中性并记一条 warning。
+
+    Example:
+        ```python
+        resolve(EmotionLabel.SURPRISE)   # 未映射，回落到中性
+        # EmotionCue(motion_group='neutral', expression='neutral')
+        ```
     """
     cue = EMOTION_MAPPING.get(label)
     if cue is not None:
