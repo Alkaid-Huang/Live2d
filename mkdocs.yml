@@ -1,0 +1,30 @@
+site_name: Live2D 数字角色
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: readthedocs
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: google
+            show_source: false
+            show_bases: false
+            show_root_heading: true
+            show_symbol_type_heading: true
+            separate_signature: true
+            show_signature_annotations: true
+            members_order: source
+            heading_level: 3
+
+nav:
+  - 开始: index.md
+  - 接口参考: reference.md
+  - 架构与时序: architecture.md
+  - 技术决策: decisions.md
+  - 操作手册: runbook.md
